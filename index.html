@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>จำนวนผู้เรียนนอกระบบโรงเรียน จำแนกตามระดับการศึกษา</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Thai:wght@500;600;700&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/prop-types@15/prop-types.js"></script>
+<script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  body { margin: 0; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useMemo } = React;
+const {
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend,
+} = Recharts;
+
+// ---- Source data (สำนักงานปลัดกระทรวงศึกษาธิการ) ----
+const YEARS = ["2563", "2564", "2565", "2566", "2567", "2568"];
+const GREGORIAN = { 2563: 2020, 2564: 2021, 2565: 2022, 2566: 2023, 2567: 2024, 2568: 2025 };
+
+const RAW = {
+  preElementary: [780911, 732202, 719672, 698054, 715605, 656049],
+  elementary: [69030, 64966, 65640, 68014, 151357, 84731],
+  lowerSecondary: [337753, 319575, 319041, 316187, 658228, 350309],
+  upperSecondary: [475398, 458961, 470534, 458573, 888434, 451164],
+  higherEd: [0, 0, 0, 0, 0, 0],
+};
+
+const LEVELS = [
+  { key: "preElementary", label: "ก่อนประถมศึกษา", color: "#C9922A" },
+  { key: "elementary", label: "ประถมศึกษา", color: "#3E7C74" },
+  { key: "lowerSecondary", label: "มัธยมศึกษาตอนต้น", color: "#5C7AA0" },
+  { key: "upperSecondary", label: "มัธยมศึกษาตอนปลาย", color: "#1B2A4A" },
+];
+
+const chartData = YEARS.map((y, i) => {
+  const row = { year: y };
+  LEVELS.forEach((l) => { row[l.key] = RAW[l.key][i]; });
+  row.total = LEVELS.reduce((s, l) => s + RAW[l.key][i], 0);
+  return row;
+});
+
+// ---- In-system vs out-of-system comparison (สำนักงานปลัดกระทรวงศึกษาธิการ) ----
+// 2563: สถิติการศึกษาประจำปี 2563 (ตาราง ค, หน้า 21) · 2564-2567: catalog.moe.go.th · 2568: สถิติการศึกษาประจำปี 2568 (ตาราง ค, หน้า 21)
+const SYSTEM_YEARS = ["2563", "2564", "2565", "2566", "2567", "2568"];
+const IN_SYSTEM_TOTAL = { 2563: 12633785, 2564: 12486640, 2565: 12485783, 2566: 12550957, 2567: 12173886, 2568: 12362711 };
+const OUT_SYSTEM_TOTAL = { 2563: 1663092, 2564: 1575704, 2565: 1574887, 2566: 1540828, 2567: 2413624, 2568: 1542253 };
+const systemShareData = SYSTEM_YEARS.map((y) => {
+  const inSys = IN_SYSTEM_TOTAL[y];
+  const outSys = OUT_SYSTEM_TOTAL[y];
+  const total = inSys + outSys;
+  return {
+    year: y,
+    inSystemPct: +((inSys / total) * 100).toFixed(1),
+    outSystemPct: +((outSys / total) * 100).toFixed(1),
+    inSystem: inSys,
+    outSystem: outSys,
+  };
+});
+
+const fmt = (n) => n.toLocaleString("th-TH");
+
+function KpiCard({ label, value, sub, accent }) {
+  return (
+    <div style={{
+      background: "#FFFFFF", border: "1px solid #E7E2D8", borderRadius: 4,
+      padding: "18px 20px", flex: "1 1 200px", minWidth: 200,
+    }}>
+      <div style={{ fontSize: 13, color: "#6B6357", marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 600, color: "#1B2A4A", fontFamily: "'Noto Serif Thai', serif" }}>
+        {value}
+      </div>
+      {sub && <div style={{ fontSize: 12.5, color: accent || "#6B6357", marginTop: 6 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function EducationDashboard() {
+  const [active, setActive] = useState(() => Object.fromEntries(LEVELS.map((l) => [l.key, true])));
+
+  const totalLatest = chartData[chartData.length - 1].total;
+  const totalFirst = chartData[0].total;
+  const pctChange = (((totalLatest - totalFirst) / totalFirst) * 100).toFixed(1);
+  const topLevel = useMemo(() => {
+    const last = chartData[chartData.length - 1];
+    return LEVELS.reduce((best, l) => (last[l.key] > last[best.key] ? l : best), LEVELS[0]);
+  }, []);
+
+  const toggle = (key) => setActive((a) => ({ ...a, [key]: !a[key] }));
+
+  return (
+    <div style={{
+      fontFamily: "'Noto Sans Thai', sans-serif", background: "#F7F5F0",
+      minHeight: "100vh", padding: "28px 24px", color: "#2B2620", boxSizing: "border-box",
+    }}>
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 13, color: "#A8632E", letterSpacing: 0.2, marginBottom: 6 }}>
+          การศึกษานอกระบบโรงเรียน · ปีการศึกษา 2563–2568
+        </div>
+        <h1 style={{
+          fontFamily: "'Noto Serif Thai', serif", fontSize: 30, fontWeight: 700,
+          color: "#1B2A4A", margin: 0, lineHeight: 1.3,
+        }}>
+          จำนวนผู้เรียนนอกระบบโรงเรียน จำแนกตามระดับการศึกษา
+        </h1>
+        <div style={{ fontSize: 13.5, color: "#6B6357", marginTop: 6 }}>
+          หน่วย: คน · ที่มา: สำนักงานปลัดกระทรวงศึกษาธิการ, กระทรวงศึกษาธิการ
+        </div>
+      </div>
+
+      {/* KPI row */}
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 24 }}>
+        <KpiCard
+          label={`รวมทั้งสิ้น ปี ${YEARS[YEARS.length - 1]} (${GREGORIAN[YEARS[YEARS.length - 1]]})`}
+          value={fmt(totalLatest)}
+          sub="คน"
+        />
+        <KpiCard
+          label={`เทียบกับปี ${YEARS[0]}`}
+          value={`${pctChange > 0 ? "+" : ""}${pctChange}%`}
+          sub={`จาก ${fmt(totalFirst)} คน ในปี ${YEARS[0]}`}
+          accent={pctChange < 0 ? "#B65C43" : "#3E7C74"}
+        />
+        <KpiCard
+          label={`กลุ่มที่มีผู้เรียนมากที่สุด (ปี ${YEARS[YEARS.length - 1]})`}
+          value={topLevel.label}
+          sub={`${fmt(RAW[topLevel.key][RAW[topLevel.key].length - 1])} คน`}
+        />
+        <KpiCard
+          label="สัดส่วนผู้เรียนนอกระบบ ต่อผู้เรียนทั้งหมด"
+          value="ปกติ ~11% · ปี 2567 พุ่งเป็น 16.5%"
+          sub="ปี 2563–2566 และ 2568 อยู่ที่ 11–11.6% เป็นปกติ มีแค่ปี 2567 ปีเดียวที่สูงผิดปกติ"
+          accent="#B65C43"
+        />
+      </div>
+
+      {/* Trend chart */}
+      <div style={{
+        background: "#FFFFFF", border: "1px solid #E7E2D8", borderRadius: 4,
+        padding: "20px 20px 8px", marginBottom: 20,
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 10, marginBottom: 4 }}>
+          <div style={{ fontFamily: "'Noto Serif Thai', serif", fontSize: 17, fontWeight: 600, color: "#1B2A4A" }}>
+            แนวโน้มจำนวนผู้เรียนตามระดับการศึกษา
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {LEVELS.map((l) => (
+              <button
+                key={l.key}
+                onClick={() => toggle(l.key)}
+                style={{
+                  border: `1px solid ${active[l.key] ? l.color : "#DCD6C9"}`,
+                  background: active[l.key] ? l.color : "#FFFFFF",
+                  color: active[l.key] ? "#FFFFFF" : "#9A927F",
+                  borderRadius: 20, padding: "4px 12px", fontSize: 12.5,
+                  cursor: "pointer", fontFamily: "'Noto Sans Thai', sans-serif",
+                }}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <ResponsiveContainer width="100%" height={320}>
+          <LineChart data={chartData} margin={{ top: 20, right: 16, left: 0, bottom: 8 }}>
+            <CartesianGrid stroke="#EFEAE0" vertical={false} />
+            <XAxis dataKey="year" tick={{ fontSize: 12.5, fill: "#6B6357" }} axisLine={{ stroke: "#DCD6C9" }} tickLine={false} />
+            <YAxis tickFormatter={(v) => (v / 1000).toLocaleString() + "k"} tick={{ fontSize: 12, fill: "#6B6357" }} axisLine={false} tickLine={false} width={50} />
+            <Tooltip formatter={(v) => `${fmt(v)} คน`} contentStyle={{ fontSize: 12.5, borderRadius: 4, border: "1px solid #E7E2D8" }} />
+            {LEVELS.filter((l) => active[l.key]).map((l) => (
+              <Line key={l.key} type="monotone" dataKey={l.key} name={l.label} stroke={l.color} strokeWidth={2.4} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Composition chart - stacked overview */}
+      <div style={{
+        background: "#FFFFFF", border: "1px solid #E7E2D8", borderRadius: 4,
+        padding: "20px 20px 8px", marginBottom: 20,
+      }}>
+        <div style={{ fontFamily: "'Noto Serif Thai', serif", fontSize: 17, fontWeight: 600, color: "#1B2A4A", marginBottom: 4 }}>
+          สัดส่วนผู้เรียนแต่ละระดับ รายปี (ภาพรวม)
+        </div>
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={chartData} margin={{ top: 20, right: 16, left: 0, bottom: 8 }}>
+            <CartesianGrid stroke="#EFEAE0" vertical={false} />
+            <XAxis dataKey="year" tick={{ fontSize: 12.5, fill: "#6B6357" }} axisLine={{ stroke: "#DCD6C9" }} tickLine={false} />
+            <YAxis tickFormatter={(v) => fmt(v)} tick={{ fontSize: 11.5, fill: "#6B6357" }} axisLine={false} tickLine={false} width={72} />
+            <Tooltip formatter={(v) => `${fmt(v)} คน`} contentStyle={{ fontSize: 12.5, borderRadius: 4, border: "1px solid #E7E2D8" }} />
+            <Legend wrapperStyle={{ fontSize: 12.5 }} />
+            {LEVELS.map((l) => (
+              <Bar key={l.key} dataKey={l.key} name={l.label} stackId="a" fill={l.color} />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Composition chart - per-level breakdown, grouped by year */}
+      <div style={{
+        background: "#FFFFFF", border: "1px solid #E7E2D8", borderRadius: 4,
+        padding: "20px 20px 8px", marginBottom: 20,
+      }}>
+        <div style={{ fontFamily: "'Noto Serif Thai', serif", fontSize: 17, fontWeight: 600, color: "#1B2A4A", marginBottom: 4 }}>
+          เปรียบเทียบแต่ละระดับ รายปี (แยกแท่ง)
+        </div>
+        <div style={{ fontSize: 12.5, color: "#6B6357", marginBottom: 8 }}>
+          กราฟเดียวกับด้านบน แต่แยกแท่งของแต่ละระดับออกจากกันในปีเดียวกัน เพื่อเทียบขนาดตรงๆ
+        </div>
+        <ResponsiveContainer width="100%" height={320}>
+          <BarChart data={chartData} margin={{ top: 20, right: 16, left: 0, bottom: 8 }}>
+            <CartesianGrid stroke="#EFEAE0" vertical={false} />
+            <XAxis dataKey="year" tick={{ fontSize: 12.5, fill: "#6B6357" }} axisLine={{ stroke: "#DCD6C9" }} tickLine={false} />
+            <YAxis tickFormatter={(v) => fmt(v)} tick={{ fontSize: 11.5, fill: "#6B6357" }} axisLine={false} tickLine={false} width={72} />
+            <Tooltip formatter={(v) => `${fmt(v)} คน`} contentStyle={{ fontSize: 12.5, borderRadius: 4, border: "1px solid #E7E2D8" }} />
+            <Legend wrapperStyle={{ fontSize: 12.5 }} />
+            {LEVELS.map((l) => (
+              <Bar key={l.key} dataKey={l.key} name={l.label} fill={l.color} />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* In-system vs out-of-system share */}
+      <div style={{
+        background: "#FFFFFF", border: "1px solid #E7E2D8", borderRadius: 4,
+        padding: "20px 20px 8px", marginBottom: 20,
+      }}>
+        <div style={{ fontFamily: "'Noto Serif Thai', serif", fontSize: 17, fontWeight: 600, color: "#1B2A4A", marginBottom: 2 }}>
+          สัดส่วนผู้เรียน: ในระบบ เทียบกับ นอกระบบโรงเรียน
+        </div>
+        <div style={{ fontSize: 12.5, color: "#6B6357", marginBottom: 8 }}>
+          ที่มา: สำนักงานปลัดกระทรวงศึกษาธิการ · สถิติการศึกษาประจำปี 2563 และ 2568 (ตาราง ค), 2564–2567 จาก catalog.moe.go.th
+        </div>
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart data={systemShareData} layout="vertical" margin={{ top: 10, right: 30, left: 10, bottom: 8 }}>
+            <CartesianGrid stroke="#EFEAE0" horizontal={false} />
+            <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => v + "%"} tick={{ fontSize: 12, fill: "#6B6357" }} axisLine={false} tickLine={false} />
+            <YAxis type="category" dataKey="year" tick={{ fontSize: 13, fill: "#2B2620" }} axisLine={false} tickLine={false} width={40} />
+            <Tooltip formatter={(v, name) => [`${v}%`, name]} contentStyle={{ fontSize: 12.5, borderRadius: 4, border: "1px solid #E7E2D8" }} />
+            <Legend wrapperStyle={{ fontSize: 12.5 }} />
+            <Bar dataKey="inSystemPct" name="ในระบบโรงเรียน" stackId="s" fill="#1B2A4A" />
+            <Bar dataKey="outSystemPct" name="นอกระบบโรงเรียน" stackId="s" fill="#C9922A" />
+          </BarChart>
+        </ResponsiveContainer>
+        <div style={{ fontSize: 12.5, color: "#B65C43", padding: "0 4px 16px" }}>
+          สัดส่วนนอกระบบนิ่งอยู่ที่ 10.9–11.6% ตลอดปี 2563–2566 ก่อนพุ่งขึ้นแตะ 16.5% เฉพาะปี 2567 แล้วร่วงกลับสู่ 11.1% ในปี 2568 — ครบ 6 ปีนี้ยืนยันชัดว่าปี 2567 เป็นการกระเพื่อมชั่วคราวปีเดียว ไม่ใช่แนวโน้มขาขึ้นต่อเนื่อง
+        </div>
+      </div>
+
+      {/* Table */}
+      <div style={{
+        background: "#FFFFFF", border: "1px solid #E7E2D8", borderRadius: 4,
+        padding: 20, overflowX: "auto",
+      }}>
+        <div style={{ fontFamily: "'Noto Serif Thai', serif", fontSize: 17, fontWeight: 600, color: "#1B2A4A", marginBottom: 12 }}>
+          ตารางข้อมูล
+        </div>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ borderBottom: "2px solid #1B2A4A" }}>
+              <th style={{ textAlign: "left", padding: "8px 10px", color: "#1B2A4A" }}>ระดับการศึกษา</th>
+              {YEARS.map((y) => (
+                <th key={y} style={{ textAlign: "right", padding: "8px 10px", color: "#1B2A4A" }}>{y}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr style={{ borderBottom: "1px solid #EFEAE0", fontWeight: 600, background: "#F7F5F0" }}>
+              <td style={{ padding: "8px 10px" }}>รวมทั้งสิ้น</td>
+              {chartData.map((row) => (
+                <td key={row.year} style={{ textAlign: "right", padding: "8px 10px" }}>{fmt(row.total)}</td>
+              ))}
+            </tr>
+            {LEVELS.map((l) => (
+              <tr key={l.key} style={{ borderBottom: "1px solid #EFEAE0" }}>
+                <td style={{ padding: "8px 10px" }}>{l.label}</td>
+                {RAW[l.key].map((v, i) => (
+                  <td key={i} style={{ textAlign: "right", padding: "8px 10px" }}>{fmt(v)}</td>
+                ))}
+              </tr>
+            ))}
+            <tr>
+              <td style={{ padding: "8px 10px", color: "#9A927F" }}>อุดมศึกษา</td>
+              {RAW.higherEd.map((v, i) => (
+                <td key={i} style={{ textAlign: "right", padding: "8px 10px", color: "#9A927F" }}>{fmt(v)}</td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+        <div style={{ fontSize: 11.5, color: "#9A927F", marginTop: 10 }}>
+          หมายเหตุ: "ก่อนประถมศึกษา" รวมนักเรียนเตรียมอนุบาล อายุไม่ถึงเกณฑ์เข้าเรียน (อายุต่ำกว่า 3 ขวบ)
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<EducationDashboard />);
+</script>
+</body>
+</html>
